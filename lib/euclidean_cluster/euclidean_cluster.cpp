@@ -651,6 +651,222 @@ void EuclideanCluster::fastEuclideanCluster(const pcl::PointCloud<pcl::PointXYZI
 }
 
 /**
+ * @brief 暴力搜索欧式聚类
+ * @param in 输入点云
+ * @param indices 聚类结果
+ */
+void EuclideanCluster::bruteForceCluster(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, std::vector<pcl::PointIndices> &indices)
+{
+    // 预分配内存
+    indices.clear();
+    
+    if (in->empty()) return;
+    
+    // 初始化标签
+    std::vector<int> labels(in->size(), -1);
+    int current_label = 0;
+    
+    // 将点云数据转换为Eigen向量数组，提高访问效率
+    std::vector<Eigen::Vector4f> points_vec(in->size());
+    #pragma omp parallel for schedule(dynamic, 1000)
+    for (size_t i = 0; i < in->size(); ++i) {
+        points_vec[i] = in->points[i].getVector4fMap();
+    }
+    
+    // 对每个点进行聚类
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        std::vector<pcl::PointIndices> local_indices;
+        local_indices.reserve(in->size() / min_cluster_size_);
+        
+        #pragma omp for schedule(dynamic, 1000)
+        for (size_t i = 0; i < in->size(); ++i)
+        {
+            if (labels[i] != -1) continue;
+            
+            // 创建新的聚类
+            pcl::PointIndices cluster;
+            cluster.indices.push_back(i);
+            labels[i] = current_label;
+            
+            // 使用队列进行广度优先搜索
+            std::queue<size_t> search_queue;
+            search_queue.push(i);
+            
+            while (!search_queue.empty())
+            {
+                size_t current_idx = search_queue.front();
+                search_queue.pop();
+                
+                // 暴力搜索邻域点
+                for (size_t j = 0; j < in->size(); ++j)
+                {
+                    if (current_idx == j || labels[j] != -1) continue;
+                    
+                    // 计算平方距离
+                    float dist_squared = (points_vec[current_idx].head<3>() - points_vec[j].head<3>()).squaredNorm();
+                    
+                    // 如果距离小于阈值，加入聚类
+                    if (dist_squared < cluster_tolerance_ * cluster_tolerance_ * 1.5)
+                    {
+                        cluster.indices.push_back(j);
+                        labels[j] = current_label;
+                        search_queue.push(j);
+                    }
+                }
+            }
+            
+            // 如果聚类大小满足要求，添加到结果中
+            if (cluster.indices.size() >= min_cluster_size_ && 
+                cluster.indices.size() <= max_cluster_size_)
+            {
+                local_indices.push_back(cluster);
+            }
+        }
+        
+        // 合并本地结果到全局结果
+        #pragma omp critical
+        {
+            indices.insert(indices.end(), local_indices.begin(), local_indices.end());
+        }
+    }
+}
+
+/**
+ * @brief 网格划分欧式聚类
+ * @param in 输入点云
+ * @param indices 聚类结果
+ */
+void EuclideanCluster::gridBasedCluster(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, std::vector<pcl::PointIndices> &indices)
+{
+    // 预分配内存
+    indices.clear();
+    
+    if (in->empty()) return;
+    
+    // 计算点云边界
+    float min_x = std::numeric_limits<float>::max();
+    float min_y = std::numeric_limits<float>::max();
+    float min_z = std::numeric_limits<float>::max();
+    float max_x = -std::numeric_limits<float>::max();
+    float max_y = -std::numeric_limits<float>::max();
+    float max_z = -std::numeric_limits<float>::max();
+    
+    for (const auto& point : in->points)
+    {
+        min_x = std::min(min_x, point.x);
+        min_y = std::min(min_y, point.y);
+        min_z = std::min(min_z, point.z);
+        max_x = std::max(max_x, point.x);
+        max_y = std::max(max_y, point.y);
+        max_z = std::max(max_z, point.z);
+    }
+    
+    // 创建网格
+    float grid_size = cluster_tolerance_;
+    int nx = static_cast<int>((max_x - min_x) / grid_size) + 1;
+    int ny = static_cast<int>((max_y - min_y) / grid_size) + 1;
+    int nz = static_cast<int>((max_z - min_z) / grid_size) + 1;
+    
+    // 使用std::vector存储网格
+    std::vector<std::vector<int>> grid(nx * ny * nz);
+    
+    // 将点分配到网格
+    for (size_t i = 0; i < in->size(); ++i)
+    {
+        int gx = static_cast<int>((in->points[i].x - min_x) / grid_size);
+        int gy = static_cast<int>((in->points[i].y - min_y) / grid_size);
+        int gz = static_cast<int>((in->points[i].z - min_z) / grid_size);
+        
+        int key = gx + gy * nx + gz * nx * ny;
+        grid[key].push_back(i);
+    }
+    
+    // 初始化标签
+    std::vector<int> labels(in->size(), -1);
+    int current_label = 0;
+    
+    // 对每个网格进行聚类
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        std::vector<pcl::PointIndices> local_indices;
+        local_indices.reserve(in->size() / min_cluster_size_);
+        
+        #pragma omp for schedule(dynamic, 1000)
+        for (size_t i = 0; i < grid.size(); ++i)
+        {
+            const auto& points = grid[i];
+            if (points.empty()) continue;
+            
+            // 创建新的聚类
+            pcl::PointIndices cluster;
+            
+            // 使用队列进行广度优先搜索
+            std::queue<int> search_queue;
+            for (int idx : points)
+            {
+                if (labels[idx] != -1) continue;
+                search_queue.push(idx);
+                labels[idx] = current_label;
+                cluster.indices.push_back(idx);
+            }
+            
+            while (!search_queue.empty())
+            {
+                int current_idx = search_queue.front();
+                search_queue.pop();
+                
+                // 检查当前网格和相邻网格中的点
+                for (int dx = -1; dx <= 1; ++dx)
+                {
+                    for (int dy = -1; dy <= 1; ++dy)
+                    {
+                        for (int dz = -1; dz <= 1; ++dz)
+                        {
+                            int nx = i + dx + dy * nx + dz * nx * ny;
+                            if (nx < 0 || nx >= grid.size()) continue;
+                            
+                            for (int idx : grid[nx])
+                            {
+                                if (labels[idx] != -1) continue;
+                                
+                                // 计算欧氏距离
+                                float dx = in->points[current_idx].x - in->points[idx].x;
+                                float dy = in->points[current_idx].y - in->points[idx].y;
+                                float dz = in->points[current_idx].z - in->points[idx].z;
+                                float dist = sqrt(dx*dx + dy*dy + dz*dz);
+                                
+                                if (dist < cluster_tolerance_ * 1.5)
+                                {
+                                    cluster.indices.push_back(idx);
+                                    labels[idx] = current_label;
+                                    search_queue.push(idx);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 如果聚类大小满足要求，添加到结果中
+            if (cluster.indices.size() >= min_cluster_size_ && 
+                cluster.indices.size() <= max_cluster_size_)
+            {
+                local_indices.push_back(cluster);
+            }
+        }
+        
+        // 合并本地结果到全局结果
+        #pragma omp critical
+        {
+            indices.insert(indices.end(), local_indices.begin(), local_indices.end());
+        }
+    }
+}
+
+/**
  * @brief 根据距离进行欧几里得聚类分割
  *
  * 根据给定的点云数据，根据距离进行欧几里得聚类分割，将分割后的点云数据存储在指定的输出点云指针和点云向量中。
@@ -753,8 +969,12 @@ void EuclideanCluster::segmentByDistance(const pcl::PointCloud<pcl::PointXYZI>::
     else if (cluster_method_ == FAST_EUCLIDEAN_CLUSTER)
     {
         // 快速欧式聚类
-        // ROS_INFO("Using fast Euclidean clustering");
         fastEuclideanCluster(in, cluster_indices);
+    }
+    else if (cluster_method_ == BRUTE_FORCE_CLUSTER)
+    {
+        // 暴力搜索欧式聚类
+        bruteForceCluster(in, cluster_indices);
     }
 
     if(cluster_indices.size() > 0)
@@ -772,6 +992,30 @@ void EuclideanCluster::segmentByDistance(const pcl::PointCloud<pcl::PointXYZI>::
         ROS_WARN("No clusters found!");
     }
 }
+
+
+void EuclideanCluster::segmentByDistance_v2(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
+                         std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &points_vector)
+{
+    std::vector<pcl::PointIndices> cluster_indices;
+    fastEuclideanCluster(in, cluster_indices);
+
+     if(cluster_indices.size() > 0)
+    {
+        for (auto it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
+        {
+            pcl::PointCloud<pcl::PointXYZI>::Ptr temp_cloud_ptr(new pcl::PointCloud<pcl::PointXYZI>);
+            pcl::copyPointCloud(*in, it->indices, *temp_cloud_ptr);
+            *out_cloud_ptr += *temp_cloud_ptr;
+            points_vector.push_back(temp_cloud_ptr);
+        }
+    }
+    else
+    {
+        ROS_WARN("No clusters found!");
+    }
+}
+
 
 /**
  * @brief 使用多线程进行欧几里得聚类

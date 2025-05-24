@@ -41,7 +41,7 @@ lidarObstacleDetection::lidarObstacleDetection(ros::NodeHandle nh, ros::NodeHand
 	_pub_clusters_message = nh.advertise<autoware_msgs::CloudClusterArray>("/detection/lidar_detector/cloud_clusters", 1);
 	_pub_detected_objects = nh.advertise<autoware_msgs::DetectedObjectArray>("/detection/lidar_detector/objects", 1);
 	_pub_cluster_visualize_markers = nh.advertise<visualization_msgs::MarkerArray>("/visualize/cluster_markers", 1);
-
+	_pub_cluster_visualize_markers_v2 = nh.advertise<visualization_msgs::MarkerArray>("/visualize/cluster_markers_true", 1);
 	ros::spin();
 }
 
@@ -68,7 +68,7 @@ void lidarObstacleDetection::ClusterCallback(
 	// 提取ROI
 	int64_t tm0 = gtm();
 	roi_clip_.GetROI(in_cloud_ptr, clip_cloud_ptr);
-	std::cout << "clip_cloud_ptr " << clip_cloud_ptr->points.size() << std::endl;
+	// std::cout << "clip_cloud_ptr " << clip_cloud_ptr->points.size() << std::endl;
 	int64_t tm1 = gtm();
 	// ROS_INFO("ROI_Clip cost time:%ld ms", (tm1 - tm0) / 1000);
 
@@ -85,6 +85,12 @@ void lidarObstacleDetection::ClusterCallback(
 	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> pointsVector;
 
 	cluster_.segmentByDistance(noground_cloud_ptr, outCloudPtr, pointsVector);
+
+	// 真值聚类
+	pcl::PointCloud<pcl::PointXYZI>::Ptr outCloudPtr_v2(new pcl::PointCloud<pcl::PointXYZI>);
+	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> pointsVector_v2;
+
+	cluster_.segmentByDistance_v2(noground_cloud_ptr, outCloudPtr_v2, pointsVector_v2);
 
 	
 	int64_t tm3 = gtm();
@@ -107,6 +113,9 @@ void lidarObstacleDetection::ClusterCallback(
 	else if(cluster_.cluster_method_ == EuclideanCluster::FAST_EUCLIDEAN_CLUSTER)
 	{
 		ROS_INFO("fastEuclidean clustercost time:%ld ms", (tm3 - tm2) / 1000);
+	}else if(cluster_.cluster_method_ == EuclideanCluster::BRUTE_FORCE_CLUSTER)
+	{
+		ROS_INFO("brute force euclidean clustercost time:%ld ms", (tm3 - tm2) / 1000);	
 	}
 	// ROS_INFO("total cost time:%ld ms", (tm3 - tm0) / 1000);
 
@@ -120,6 +129,15 @@ void lidarObstacleDetection::ClusterCallback(
 	visualization_msgs::MarkerArray visualize_markers;
 	vdo_.visualizeDetectedObjs(detected_objects, visualize_markers);
 	_pub_cluster_visualize_markers.publish(visualize_markers);
+
+	// 真值可视化
+	autoware_msgs::CloudClusterArray inOutClusters_v2;
+	bounding_box_.getBoundingBox(header, pointsVector_v2, inOutClusters_v2);
+	autoware_msgs::DetectedObjectArray detected_objects_v2;
+	publishDetectedObjects(inOutClusters_v2, detected_objects_v2);
+	visualization_msgs::MarkerArray visualize_markers_v2;
+	vdo_.visualizeDetectedObjs(detected_objects_v2, visualize_markers_v2);
+	_pub_cluster_visualize_markers_v2.publish(visualize_markers_v2);
 
 	// 发布topic
 

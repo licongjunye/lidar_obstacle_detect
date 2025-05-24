@@ -20,7 +20,7 @@ leaf_size: 0.1
 
 # remove ground
 
-cluster_method: 4  # 1:欧式聚类，2:DBSCAN聚类  3.Kmeans++  4.MeanShift  5.快速欧式聚类
+cluster_method: 5  # 1:欧式聚类，2:DBSCAN聚类  3.Kmeans++  4.MeanShift  5.快速欧式聚类  6.暴力搜索欧式聚类
 
 #  euclidean_cluster
 cluster_tolerance: 0.5

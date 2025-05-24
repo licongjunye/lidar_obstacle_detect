@@ -45,9 +45,16 @@ public:
   void segmentByDistance(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
                          std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &points_vector);
 
+  void segmentByDistance_v2(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
+                         std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &points_vector);
+
   void clusterIndicesMultiThread(const pcl::PointCloud<pcl::PointXYZI>::Ptr in_cloud_ptr, double in_max_cluster_distance,
                                  std::promise<std::vector<pcl::PointIndices>> &promiseObj);
 
+  // 暴力搜索欧式聚类
+  void bruteForceCluster(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, std::vector<pcl::PointIndices> &indices);
+  // 网格划分欧式聚类
+  void gridBasedCluster(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, std::vector<pcl::PointIndices> &indices);
 
   int cluster_method_;
   enum ClusterMethod
@@ -56,7 +63,8 @@ public:
       DBSCAN_CLUSTER = 2,
       KMEANS_CLUSTER = 3,
       MEANSHIFT_CLUSTER = 4,
-      FAST_EUCLIDEAN_CLUSTER = 5
+      FAST_EUCLIDEAN_CLUSTER = 5,
+      BRUTE_FORCE_CLUSTER = 6 // 暴力搜索欧式聚类
   };
   
 

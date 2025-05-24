@@ -64,6 +64,8 @@ public:
     ros::Publisher _pub_cluster_visualize_markers;
     ros::Publisher _pub_3Dobjects_visualize_markers;
 
+    ros::Publisher _pub_cluster_visualize_markers_v2;
+
     VisualizeDetectedObjects vdto;
 
 private:
