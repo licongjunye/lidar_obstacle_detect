@@ -45,7 +45,7 @@ public:
   void segmentByDistance(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
                          std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &points_vector);
 
-  void segmentByDistance_v2(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
+  void segmentByDistance_true(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
                          std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &points_vector);
 
   void clusterIndicesMultiThread(const pcl::PointCloud<pcl::PointXYZI>::Ptr in_cloud_ptr, double in_max_cluster_distance,

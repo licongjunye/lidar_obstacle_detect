@@ -994,7 +994,7 @@ void EuclideanCluster::segmentByDistance(const pcl::PointCloud<pcl::PointXYZI>::
 }
 
 
-void EuclideanCluster::segmentByDistance_v2(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
+void EuclideanCluster::segmentByDistance_true(const pcl::PointCloud<pcl::PointXYZI>::Ptr in, pcl::PointCloud<pcl::PointXYZI>::Ptr &out_cloud_ptr,
                          std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &points_vector)
 {
     std::vector<pcl::PointIndices> cluster_indices;

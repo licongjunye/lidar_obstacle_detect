@@ -64,13 +64,32 @@ public:
     ros::Publisher _pub_cluster_visualize_markers;
     ros::Publisher _pub_3Dobjects_visualize_markers;
 
-    ros::Publisher _pub_cluster_visualize_markers_v2;
+    ros::Publisher _pub_cluster_visualize_markers_true;
 
     VisualizeDetectedObjects vdto;
 
 private:
     void ClusterCallback(const sensor_msgs::PointCloud2ConstPtr &in_sensor_cloud);
     void publishDetectedObjects(const autoware_msgs::CloudClusterArray &in_clusters, autoware_msgs::DetectedObjectArray &detected_objects);
+    
+    /**
+     * @brief 计算两个检测框的IoU（Intersection over Union）
+     * 
+     * @param box1 第一个检测框
+     * @param box2 第二个检测框
+     * @return double IoU值
+     */
+    double calculateIoU(const autoware_msgs::DetectedObject& box1, const autoware_msgs::DetectedObject& box2);
+    
+    /**
+     * @brief 计算两组检测框的平均IoU
+     * 
+     * @param test_objects 测试检测框
+     * @param true_objects 真实检测框
+     * @return double 平均IoU值
+     */
+    double calculateAverageIoU(const autoware_msgs::DetectedObjectArray& test_objects, 
+                              const autoware_msgs::DetectedObjectArray& true_objects);
 };
 
 #endif
